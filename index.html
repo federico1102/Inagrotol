@@ -710,6 +710,7 @@ function generateLots() {
       pptoTotal:pptoTotal, pptoXha:pptoXha,
       metaTotal:metaTotal, metaXha:metaXha,
       ejctTotal:ejctTotal, ejctXha:ejctXha, pctEjec:pctEjec,
+      pptoCats:lot.pptoCats||null, metaCats:lot.metaCats||null, ejctCats:lot.ejctCats||null,
       lastUpdate:"", responsable:"",
       dates:{descanso:lot.fd,prep:lot.fp,siembra:lot.fs,germinacion:lot.fg,vegetacion:lot.fv,reproduccion:lot.fr,maduracion:lot.fm,cosecha:lot.fc,postCosecha:lot.fpc}
     };
@@ -1112,11 +1113,15 @@ function getFinDiscount(area) {
   return 0.06;
 }
 
+var CAT_KEYS = ['cInd','fert','herb','sem','fung','serv','transp','mate','astAgr','adtOtros','insect','astTec','arriendo'];
+
 function genLotCosts(lot) {
-  return COST_CATS.map(function(cat) {
-    var budget = cat.ppto * lot.areaReal;
-    var metaBase = cat.meta * lot.areaReal;
-    return {name:cat.name, ppto:budget, meta:metaBase, executed:0, color:cat.color, note:cat.note||null};
+  return COST_CATS.map(function(cat, i) {
+    var key = CAT_KEYS[i];
+    var budget   = lot.pptoCats ? (lot.pptoCats[key] || 0) : (cat.ppto * lot.areaReal);
+    var metaBase = lot.metaCats ? (lot.metaCats[key] || 0) : (cat.meta * lot.areaReal);
+    var executed = lot.ejctCats ? (lot.ejctCats[key] || 0) : 0;
+    return {name:cat.name, ppto:budget, meta:metaBase, executed:executed, color:cat.color, note:cat.note||null};
   });
 }
 
