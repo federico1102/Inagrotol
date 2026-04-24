@@ -2376,70 +2376,186 @@ function openLotSheetMobile(lotId) {
   var hColor = HEALTH_COLORS[lot.health];
   var pColor = PHASE_COLORS[lot.phase];
   window._sheetLotId = lotId;
-  var apps = getBitacoraForLot(lotId);
-  _sheetApps = apps;
+  window._sheetLot = lot;
 
-  // Get unique semesters for this lot
+  // Get unique semesters for this lot, ordered chronologically (A antes que B dentro del mismo año)
   var lotSems = {};
   RAW_BITACORA.forEach(function(a){ if(a.lot===lotId && a.sem) lotSems[a.sem]=true; });
-  var sortedLotSems = Object.keys(lotSems).sort();
+  var chronoLotSems = Object.keys(lotSems).sort(function(a,b){
+    var ya = parseInt((a.split("-")[1]||"0"),10);
+    var yb = parseInt((b.split("-")[1]||"0"),10);
+    if (ya !== yb) return ya - yb;
+    return (a.charAt(0) === "A" ? 0 : 1) - (b.charAt(0) === "A" ? 0 : 1);
+  });
+  var defaultSem = chronoLotSems.length > 0 ? chronoLotSems[chronoLotSems.length - 1] : (getLotSemester(lot) || "");
+  var apps = getBitacoraForLot(lotId, defaultSem);
+  _sheetApps = apps;
 
   var html = '<div style="padding: 16px; padding-bottom: 80px;">' +
     '<div class="bottom-sheet-handle"></div>' +
     '<button class="bottom-sheet-close" onclick="closeLotSheet()" style="float: right;">✕</button>' +
+
+    // Selector de semestre al tope del modal (igual que desktop) — filtra indicadores, finanzas y bitácora
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:24px;margin-bottom:16px;flex-wrap:wrap;padding:10px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;">' +
+      '<span style="font-size:12px;color:#374151;font-weight:600;">📅 Semestre:</span>' +
+      '<select id="sheet-bitacora-sem" onchange="filterSheetBitacora()" style="padding:6px 10px;border:1px solid #D1D5DB;border-radius:8px;font-size:12px;outline:none;cursor:pointer;background:#fff;flex:1;min-width:120px;">' +
+        '<option value=""'+(defaultSem===""?' selected':'')+'>Todos los semestres</option>' +
+        chronoLotSems.map(function(s){ return '<option value="'+s+'"'+(s===defaultSem?' selected':'')+'>'+s+'</option>'; }).join("") +
+      '</select>' +
+      '<span style="font-size:10px;color:#9CA3AF;width:100%;">Por defecto el último semestre del lote. Filtra bitácora e indicadores.</span>' +
+    '</div>' +
+
     '<h2 style="font-size: 20px; font-weight: 800; color: #111827; margin-bottom: 4px;">'+lot.name+'</h2>' +
-    '<p style="font-size: 12px; color: #6B7280; margin-bottom: 12px;">'+lot.id+'</p>' +
+    '<p style="font-size: 12px; color: #6B7280; margin-bottom: 12px;">'+lot.id+' · '+lot.areaReal+' ha · '+(lot.responsable||"—")+'</p>' +
     '<div style="display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;">' +
-      '<span class="badge" style="background: '+HEALTH_BG[lot.health]+'; color: '+hColor+';">'+lot.health+'</span>' +
-      '<span class="badge" style="background: '+pColor+'18; color: '+pColor+';">'+lot.phase+'</span>' +
-      '<span class="badge" style="background: #F3F4F6; color: #374151;">🧬 '+lot.variedad+'</span>' +
+      '<span id="sheet-health-badge" class="badge" style="background: '+HEALTH_BG[lot.health]+'; color: '+hColor+';">'+lot.health+'</span>' +
+      '<span id="sheet-phase-badge" class="badge" style="background: '+pColor+'18; color: '+pColor+';">'+lot.phase+'</span>' +
+      '<span class="badge" style="background:#0EA5E918;color:#0EA5E9;">'+HACIENDA_NAMES[lot.hacienda]+'</span>' +
+      '<span id="sheet-variedad-badge" class="badge" style="background: #F3F4F6; color: #374151;">🧬 '+lot.variedad+'</span>' +
     '</div>' +
 
     '<div class="grid-3">' +
       '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Área real</p><p style="font-size: 16px; font-weight: 700; color: #111827;">'+lot.areaReal+' ha</p></div>' +
       '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Área contrato</p><p style="font-size: 16px; font-weight: 700; color: #111827;">'+lot.areaContrato+' ha</p></div>' +
-      '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Progreso</p><p style="font-size: 16px; font-weight: 700; color: #111827;">'+lot.progressLabel+'</p></div>' +
+      '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Progreso</p><p id="sheet-progress-value" style="font-size: 16px; font-weight: 700; color: #111827;">'+lot.progressLabel+'</p></div>' +
     '</div>' +
 
-    '<div style="margin-top: 16px;">' +
-      '<div style="background: #EFF6FF; border-radius: 8px; padding: 12px; border-left: 3px solid #3B82F6; margin-bottom: 8px;">' +
-        '<p style="font-size: 11px; color: #3B82F6; font-weight: 600;">DDS</p>' +
-        '<p style="font-size: 20px; font-weight: 800; color: #1E40AF;">'+(lot.dds!==null?lot.dds+' días':'—')+'</p>' +
-      '</div>' +
-      '<div style="background: #ECFDF5; border-radius: 8px; padding: 12px; border-left: 3px solid #10B981; margin-bottom: 8px;">' +
-        '<p style="font-size: 11px; color: #10B981; font-weight: 600;">DDG</p>' +
-        '<p style="font-size: 20px; font-weight: 800; color: #065F46;">'+(lot.ddg!==null?lot.ddg+' días':'—')+'</p>' +
-      '</div>' +
-      (function(){
-        var dpc = calcDPC(lot);
-        var dpcLabel = dpc !== null ? (dpc > 0 ? dpc+' días' : dpc === 0 ? 'Hoy' : 'Hace '+Math.abs(dpc)+'d') : '—';
-        var dpcColor = dpc !== null && dpc > 0 ? '#F59E0B' : dpc !== null && dpc <= 0 ? '#EF4444' : '#9CA3AF';
-        var dpcBg = dpc !== null && dpc > 0 ? '#FFFBEB' : dpc !== null && dpc <= 0 ? '#FEF2F2' : '#F9FAFB';
-        var dpcBorder = dpc !== null && dpc > 0 ? '#F59E0B' : dpc !== null && dpc <= 0 ? '#EF4444' : '#D1D5DB';
-        var dpcText = dpc !== null && dpc > 0 ? '#92400E' : dpc !== null && dpc <= 0 ? '#991B1B' : '#6B7280';
-        return '<div style="background: '+dpcBg+'; border-radius: 8px; padding: 12px; border-left: 3px solid '+dpcBorder+';">' +
-          '<p style="font-size: 11px; color: '+dpcColor+'; font-weight: 600;">DPC — Días para cosechar</p>' +
-          '<p style="font-size: 20px; font-weight: 800; color: '+dpcText+';">'+dpcLabel+'</p>' +
-        '</div>';
-      })() +
-    '</div>' +
+    '<div id="sheet-indicators-wrap" style="margin-top: 16px;"></div>' +
 
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:10px;gap:8px;flex-wrap:wrap;">' +
+    '<div class="section-title" style="margin-top: 20px;">💰 Finanzas</div>' +
+    '<div id="sheet-finance-wrap"></div>' +
+
+    '<div style="margin-top:20px;margin-bottom:10px;">' +
       '<div class="section-title" style="margin:0;">📋 Bitácora de lote</div>' +
-      '<select id="sheet-bitacora-sem" onchange="filterSheetBitacora()" style="padding:5px 10px;border:1px solid #D1D5DB;border-radius:8px;font-size:11px;outline:none;cursor:pointer;">' +
-        '<option value="">Todos los semestres</option>' +
-        sortedLotSems.map(function(s){ return '<option value="'+s+'">'+s+'</option>'; }).join("") +
-      '</select>' +
     '</div>' +
     '<div style="font-size:11px;color:#6B7280;margin-bottom:10px;"><span id="sheet-app-count">'+apps.length+'</span> registros</div>' +
-    (apps.length > 0 ?
-      '<div id="sheet-tipo-chips" class="app-filter-chips" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">' +
-        '<button onclick="filterSheetApps(\'\',this)" class="chip active" style="font-size:11px;padding:3px 8px;border-radius:16px;border:1px solid #E5E7EB;background:#111827;color:#fff;cursor:pointer;">Todas</button>' +
-        Object.keys(TIPO_CONFIG).filter(function(t){ return apps.some(function(a){return a.tipo===t;}); }).map(function(t){
-          var cfg = TIPO_CONFIG[t];
-          return '<button onclick="filterSheetApps(\''+t+'\',this)" class="chip" style="font-size:11px;padding:3px 8px;border-radius:16px;border:1px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer;">'+cfg.emoji+' '+t+'</button>';
-        }).join('') +
+    '<div id="sheet-tipo-chips" class="app-filter-chips" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>' +
+    '<div id="sheet-bitacora-wrap"></div>' +
+  '</div>';
+
+  document.getElementById("mob-lot-sheet").innerHTML = html;
+  document.getElementById("mob-bottom-sheet-overlay").classList.add("active");
+  renderSheetIndicators(lot, defaultSem);
+  renderSheetBitacoraShell(apps);
+  renderSheetApps('');
+}
+
+// Neutraliza Finanzas en "Todos los semestres" (equivalente a renderModalFinance del desktop)
+function renderSheetFinance(lot, sem) {
+  var wrap = document.getElementById("sheet-finance-wrap");
+  if (!wrap) return;
+  var dashCard = function(icon, label, note) {
+    return '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">'+icon+' '+label+'</p>' +
+      '<p style="font-size:14px;font-weight:700;color:#9CA3AF;margin-top:2px;">—</p>' +
+      '<p class="meta-ref" style="color:#9CA3AF;">'+(note||"—")+'</p></div>';
+  };
+  if (!sem) {
+    wrap.innerHTML =
+      '<div class="grid-3" style="margin-bottom:12px;">' +
+        dashCard("💵","Ppto x Ha") + dashCard("📊","Ppto x Lote") + dashCard("📈","Ejecutado") +
       '</div>' +
+      '<div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:0%;background:#E5E7EB;"></div></div>';
+    return;
+  }
+  var b = getBudgetForSem(lot.id, sem);
+  if (!b) {
+    wrap.innerHTML =
+      '<div class="grid-3" style="margin-bottom:12px;">' +
+        dashCard("💵","Ppto x Ha","Sin registro") + dashCard("📊","Ppto x Lote","Sin registro") + dashCard("📈","Ejecutado","Sin registro") +
+      '</div>' +
+      '<p style="font-size:10px;color:#9CA3AF;margin-bottom:6px;">Sin presupuesto para '+sem+'.</p>' +
+      '<div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:0%;background:#E5E7EB;"></div></div>';
+    return;
+  }
+  wrap.innerHTML =
+    '<div class="grid-3" style="margin-bottom:12px;">' +
+      '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">💵 Ppto x Ha</p><p style="font-size:14px;font-weight:700;color:#111827;margin-top:2px;">'+fmtC(b.pptoXha)+'</p><p class="meta-ref">Meta: '+fmtC(b.metaXha)+'</p></div>' +
+      '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">📊 Ppto x Lote</p><p style="font-size:14px;font-weight:700;color:#111827;margin-top:2px;">'+fmtC(b.pptoTotal)+'</p><p class="meta-ref">Meta: '+fmtC(b.metaTotal)+'</p></div>' +
+      '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">📈 Ejecutado</p><p style="font-size:14px;font-weight:700;color:'+(b.pctEjec>100?"#DC2626":"#111827")+';margin-top:2px;">'+fmtC(b.ejctTotal)+'</p><p class="meta-ref">'+b.pctEjec+'% vs ppto</p></div>' +
+    '</div>' +
+    '<div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:'+Math.min(100,b.pctEjec)+'%;background:'+(b.pctEjec>100?"#EF4444":"#059669")+';"></div></div>';
+}
+
+// Actualiza badges + DDS/DDG/DPC + progreso + finanzas según semestre (equivalente a renderModalIndicators)
+function renderSheetIndicators(lot, sem) {
+  renderSheetFinance(lot, sem);
+  var wrap = document.getElementById("sheet-indicators-wrap");
+  if (!wrap) return;
+  var ind = calcIndicatorsForSem(lot, sem);
+
+  var healthBadge = document.getElementById("sheet-health-badge");
+  var phaseBadge = document.getElementById("sheet-phase-badge");
+  var varBadge = document.getElementById("sheet-variedad-badge");
+  var progressEl = document.getElementById("sheet-progress-value");
+
+  if (!sem) {
+    if (healthBadge) { healthBadge.textContent = "—"; healthBadge.style.background = "#F3F4F6"; healthBadge.style.color = "#9CA3AF"; }
+    if (phaseBadge) { phaseBadge.textContent = "—"; phaseBadge.style.background = "#F3F4F6"; phaseBadge.style.color = "#9CA3AF"; }
+    if (varBadge) {
+      var vars = getAllVariedadesForLot(lot.id, lot.variedad);
+      varBadge.innerHTML = "🧬 " + (vars.length > 0 ? vars.join(", ") : "—");
+    }
+    if (progressEl) { progressEl.textContent = "—"; progressEl.style.color = "#9CA3AF"; }
+  } else {
+    if (healthBadge) {
+      var hC = HEALTH_COLORS[lot.health] || "#374151";
+      healthBadge.textContent = lot.health;
+      healthBadge.style.background = HEALTH_BG[lot.health] || "#F3F4F6";
+      healthBadge.style.color = hC;
+    }
+    if (phaseBadge) {
+      var pC = PHASE_COLORS[lot.phase] || "#374151";
+      phaseBadge.textContent = lot.phase;
+      phaseBadge.style.background = pC + "18";
+      phaseBadge.style.color = pC;
+    }
+    if (varBadge) varBadge.innerHTML = "🧬 " + (ind.variedad || "—");
+    if (progressEl) { progressEl.textContent = lot.progressLabel; progressEl.style.color = "#111827"; }
+  }
+
+  if (ind.cosechado) {
+    var cBg = '#ECFDF5', cBorder = '#10B981', cColor = '#065F46';
+    wrap.innerHTML =
+      '<div style="background:'+cBg+';border-radius:8px;padding:12px;border-left:3px solid '+cBorder+';margin-bottom:8px;"><p style="font-size:11px;color:'+cBorder+';font-weight:600;">DDS</p><p style="font-size:18px;font-weight:800;color:'+cColor+';">✅ Cosechado</p></div>' +
+      '<div style="background:'+cBg+';border-radius:8px;padding:12px;border-left:3px solid '+cBorder+';margin-bottom:8px;"><p style="font-size:11px;color:'+cBorder+';font-weight:600;">DDG</p><p style="font-size:18px;font-weight:800;color:'+cColor+';">✅ Cosechado</p></div>' +
+      '<div style="background:'+cBg+';border-radius:8px;padding:12px;border-left:3px solid '+cBorder+';"><p style="font-size:11px;color:'+cBorder+';font-weight:600;">DPC — Días para cosechar</p><p style="font-size:18px;font-weight:800;color:'+cColor+';">✅ Cosechado</p></div>';
+    return;
+  }
+
+  var dpc = ind.dpc;
+  var dpcLabel = dpc !== null ? (dpc > 0 ? dpc+' días' : dpc === 0 ? 'Hoy' : 'Hace '+Math.abs(dpc)+'d') : '—';
+  var dpcColor = dpc !== null && dpc > 0 ? '#F59E0B' : dpc !== null && dpc <= 0 ? '#EF4444' : '#9CA3AF';
+  var dpcBg = dpc !== null && dpc > 0 ? '#FFFBEB' : dpc !== null && dpc <= 0 ? '#FEF2F2' : '#F9FAFB';
+  var dpcBorder = dpc !== null && dpc > 0 ? '#F59E0B' : dpc !== null && dpc <= 0 ? '#EF4444' : '#D1D5DB';
+  var dpcText = dpc !== null && dpc > 0 ? '#92400E' : dpc !== null && dpc <= 0 ? '#991B1B' : '#6B7280';
+  wrap.innerHTML =
+    '<div style="background: #EFF6FF; border-radius: 8px; padding: 12px; border-left: 3px solid #3B82F6; margin-bottom: 8px;">' +
+      '<p style="font-size: 11px; color: #3B82F6; font-weight: 600;">DDS — Días después de siembra</p>' +
+      '<p style="font-size: 20px; font-weight: 800; color: #1E40AF;">'+(ind.dds!==null?ind.dds+' días':'—')+'</p>' +
+    '</div>' +
+    '<div style="background: #ECFDF5; border-radius: 8px; padding: 12px; border-left: 3px solid #10B981; margin-bottom: 8px;">' +
+      '<p style="font-size: 11px; color: #10B981; font-weight: 600;">DDG — Días después de germinación</p>' +
+      '<p style="font-size: 20px; font-weight: 800; color: #065F46;">'+(ind.ddg!==null?ind.ddg+' días':'—')+'</p>' +
+    '</div>' +
+    '<div style="background: '+dpcBg+'; border-radius: 8px; padding: 12px; border-left: 3px solid '+dpcBorder+';">' +
+      '<p style="font-size: 11px; color: '+dpcColor+'; font-weight: 600;">DPC — Días para cosechar</p>' +
+      '<p style="font-size: 20px; font-weight: 800; color: '+dpcText+';">'+dpcLabel+'</p>' +
+    '</div>';
+}
+
+// Renderiza la tabla/empty-state de bitácora dentro del sheet mobile
+function renderSheetBitacoraShell(apps) {
+  var wrap = document.getElementById("sheet-bitacora-wrap");
+  var chips = document.getElementById("sheet-tipo-chips");
+  if (!wrap || !chips) return;
+  if (apps.length > 0) {
+    chips.innerHTML =
+      '<button onclick="filterSheetApps(\'\',this)" class="chip active" style="font-size:11px;padding:3px 8px;border-radius:16px;border:1px solid #E5E7EB;background:#111827;color:#fff;cursor:pointer;">Todas</button>' +
+      Object.keys(TIPO_CONFIG).filter(function(t){ return apps.some(function(a){return a.tipo===t;}); }).map(function(t){
+        var cfg = TIPO_CONFIG[t];
+        return '<button onclick="filterSheetApps(\''+t+'\',this)" class="chip" style="font-size:11px;padding:3px 8px;border-radius:16px;border:1px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer;">'+cfg.emoji+' '+t+'</button>';
+      }).join('');
+    wrap.innerHTML =
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #E5E7EB;border-radius:10px;">' +
         '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px;">' +
           '<thead><tr style="background:#F9FAFB;">' +
@@ -2455,25 +2571,14 @@ function openLotSheetMobile(lotId) {
           '</tr></thead>' +
           '<tbody id="sheet-apps"></tbody>' +
         '</table>' +
-      '</div>'
-    :
+      '</div>';
+  } else {
+    chips.innerHTML = '';
+    wrap.innerHTML =
       '<div style="border:1px solid #E5E7EB;border-radius:10px;padding:24px;text-align:center;">' +
         '<p style="font-size:13px;color:#9CA3AF;margin:0;">Sin registros de bitácora</p>' +
-      '</div>'
-    ) +
-
-    '<div class="section-title" style="margin-top: 20px;">Finanzas</div>' +
-    '<div class="grid-3" style="margin-bottom: 16px;">' +
-      '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Costo x Ha</p><p style="font-size: 14px; font-weight: 700; color: #111827;">'+fmtC(lot.pptoXha)+'</p><p class="meta-ref">Meta: '+fmtC(lot.metaXha)+'</p></div>' +
-      '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Presupuesto lote</p><p style="font-size: 14px; font-weight: 700; color: #111827;">'+fmtC(lot.pptoTotal)+'</p><p class="meta-ref">Meta: '+fmtC(lot.metaTotal)+'</p></div>' +
-      '<div style="background: #F9FAFB; border-radius: 8px; padding: 10px;"><p style="font-size: 10px; color: #6B7280;">Ejecutado</p><p style="font-size: 14px; font-weight: 700; color: #111827;">'+fmtC(lot.ejctTotal)+'</p><p class="meta-ref">'+lot.pctEjec+'% ejecutado vs ppto</p></div>' +
-    '</div>' +
-    '<div class="progress-bar" style="height: 8px;"><div class="progress-fill" style="width: '+Math.min(lot.pctEjec, 100)+'%; background: '+(lot.pctEjec>100?"#EF4444":"#059669")+';"></div></div>' +
-  '</div>';
-
-  document.getElementById("mob-lot-sheet").innerHTML = html;
-  document.getElementById("mob-bottom-sheet-overlay").classList.add("active");
-  renderSheetApps('');
+      '</div>';
+  }
 }
 
 var _sheetApps = [];
@@ -2529,16 +2634,10 @@ function filterSheetBitacora() {
   var apps = getBitacoraForLot(lotId, semFilter);
   _sheetApps = apps;
   _sheetAppFilter = '';
-  // Re-render chips
-  var chipsContainer = document.getElementById("sheet-tipo-chips");
-  if (chipsContainer) {
-    chipsContainer.innerHTML =
-      '<button onclick="filterSheetApps(\'\',this)" class="chip active" style="font-size:11px;padding:3px 8px;border-radius:16px;border:1px solid #E5E7EB;background:#111827;color:#fff;cursor:pointer;">Todas</button>' +
-      Object.keys(TIPO_CONFIG).filter(function(t){ return apps.some(function(a){return a.tipo===t;}); }).map(function(t){
-        var cfg = TIPO_CONFIG[t];
-        return '<button onclick="filterSheetApps(\''+t+'\',this)" class="chip" style="font-size:11px;padding:3px 8px;border-radius:16px;border:1px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer;">'+cfg.emoji+' '+t+'</button>';
-      }).join('');
-  }
+  // Re-render indicadores DDS/DDG/DPC, finanzas, badges, progreso según semestre (espejo del desktop)
+  if (window._sheetLot) renderSheetIndicators(window._sheetLot, semFilter);
+  // Re-render tabla + chips (crea/borra según apps.length)
+  renderSheetBitacoraShell(apps);
   renderSheetApps('');
 }
 
@@ -2548,6 +2647,7 @@ function closeLotSheet() {
   _sheetApps = [];
   _sheetAppFilter = '';
   window._sheetLotId = null;
+  window._sheetLot = null;
 }
 
 // ═══════════════════════════════════════════
