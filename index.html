@@ -2449,10 +2449,12 @@ function renderSheetFinance(lot, sem) {
       '<p style="font-size:14px;font-weight:700;color:#9CA3AF;margin-top:2px;">—</p>' +
       '<p class="meta-ref" style="color:#9CA3AF;">'+(note||"—")+'</p></div>';
   };
+  var finGrid = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;';
   if (!sem) {
     wrap.innerHTML =
-      '<div class="grid-3" style="margin-bottom:12px;">' +
-        dashCard("💵","Ppto x Ha") + dashCard("📊","Ppto x Lote") + dashCard("📈","Ejecutado") +
+      '<div style="'+finGrid+'">' +
+        dashCard("💵","Ppto x Ha") + dashCard("📊","Ppto x Lote") +
+        dashCard("🎯","Ejec. YTD x Ha") + dashCard("📈","Ejec. YTD x Lote") +
       '</div>' +
       '<div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:0%;background:#E5E7EB;"></div></div>';
     return;
@@ -2460,18 +2462,21 @@ function renderSheetFinance(lot, sem) {
   var b = getBudgetForSem(lot.id, sem);
   if (!b) {
     wrap.innerHTML =
-      '<div class="grid-3" style="margin-bottom:12px;">' +
-        dashCard("💵","Ppto x Ha","Sin registro") + dashCard("📊","Ppto x Lote","Sin registro") + dashCard("📈","Ejecutado","Sin registro") +
+      '<div style="'+finGrid+'">' +
+        dashCard("💵","Ppto x Ha","Sin registro") + dashCard("📊","Ppto x Lote","Sin registro") +
+        dashCard("🎯","Ejec. YTD x Ha","Sin registro") + dashCard("📈","Ejec. YTD x Lote","Sin registro") +
       '</div>' +
       '<p style="font-size:10px;color:#9CA3AF;margin-bottom:6px;">Sin presupuesto para '+sem+'.</p>' +
       '<div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:0%;background:#E5E7EB;"></div></div>';
     return;
   }
+  var pctXha = (b.pptoXha > 0) ? Math.round((b.ejctXha / b.pptoXha) * 100) : 0;
   wrap.innerHTML =
-    '<div class="grid-3" style="margin-bottom:12px;">' +
+    '<div style="'+finGrid+'">' +
       '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">💵 Ppto x Ha</p><p style="font-size:14px;font-weight:700;color:#111827;margin-top:2px;">'+fmtC(b.pptoXha)+'</p><p class="meta-ref">Meta: '+fmtC(b.metaXha)+'</p></div>' +
       '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">📊 Ppto x Lote</p><p style="font-size:14px;font-weight:700;color:#111827;margin-top:2px;">'+fmtC(b.pptoTotal)+'</p><p class="meta-ref">Meta: '+fmtC(b.metaTotal)+'</p></div>' +
-      '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">📈 Ejecutado</p><p style="font-size:14px;font-weight:700;color:'+(b.pctEjec>100?"#DC2626":"#111827")+';margin-top:2px;">'+fmtC(b.ejctTotal)+'</p><p class="meta-ref">'+b.pctEjec+'% vs ppto</p></div>' +
+      '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">🎯 Ejec. YTD x Ha</p><p style="font-size:14px;font-weight:700;color:'+(b.ejctXha>b.pptoXha?"#DC2626":"#111827")+';margin-top:2px;">'+fmtC(b.ejctXha)+'</p><p class="meta-ref">'+pctXha+'% vs ppto</p></div>' +
+      '<div style="background:#F9FAFB;border-radius:8px;padding:10px;"><p style="font-size:10px;color:#6B7280;">📈 Ejec. YTD x Lote</p><p style="font-size:14px;font-weight:700;color:'+(b.pctEjec>100?"#DC2626":"#111827")+';margin-top:2px;">'+fmtC(b.ejctTotal)+'</p><p class="meta-ref">'+b.pctEjec+'% vs ppto</p></div>' +
     '</div>' +
     '<div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:'+Math.min(100,b.pctEjec)+'%;background:'+(b.pctEjec>100?"#EF4444":"#059669")+';"></div></div>';
 }
